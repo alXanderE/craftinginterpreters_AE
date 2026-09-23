@@ -27,6 +27,7 @@ class Interpreter implements Expr.Visitor<Object>,
 //> Functions global-environment
   final Environment globals = new Environment();
   private Environment environment = globals;
+  private static Object uninitialized = new Object();
 //< Functions global-environment
 //> Resolving and Binding locals-field
   private final Map<Expr, Integer> locals = new HashMap<>();
@@ -234,7 +235,7 @@ class Interpreter implements Expr.Visitor<Object>,
 //> Statements and State visit-var
   @Override
   public Void visitVarStmt(Stmt.Var stmt) {
-    Object value = null;
+    Object value = uninitialized;
     if (stmt.initializer != null) {
       value = evaluate(stmt.initializer);
     }
@@ -486,7 +487,12 @@ class Interpreter implements Expr.Visitor<Object>,
     return environment.get(expr.name);
 */
 //> Resolving and Binding call-look-up-variable
-    return lookUpVariable(expr.name, expr);
+    Object value = environment.get(expr.name);
+    if (value == uninitialized){
+      throw new RuntimeError(expr.name, 
+       "Variable must be initialized before use")
+    }
+    return value;
 //< Resolving and Binding call-look-up-variable
   }
 //> Resolving and Binding look-up-variable
