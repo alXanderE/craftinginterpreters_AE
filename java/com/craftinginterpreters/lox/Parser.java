@@ -12,12 +12,17 @@ import java.util.List;
 import static com.craftinginterpreters.lox.TokenType.*;
 
 class Parser {
+
 //> parse-error
   private static class ParseError extends RuntimeException {}
 
 //< parse-error
   private final List<Token> tokens;
   private int current = 0;
+
+// REPL implementation
+  private boolean allowExpression;
+  private boolean foundExpression = false;  
 
   Parser(List<Token> tokens) {
     this.tokens = tokens;
@@ -31,6 +36,24 @@ class Parser {
     }
   }
 */
+
+  Object parseRepl() {
+    allowExpression = true;
+    List<Stmt> statements = new ArrayList<>();
+    while (!isAtEnd()) {
+      statements.add(declaration());
+
+      if (foundExpression) {
+        Stmt last = statements.get(statements.size() - 1);
+        return ((Stmt.Expression) last).expression;
+      }
+
+      allowExpression = false;
+    }
+
+    return statements;
+  }
+
 //> Statements and State parse
   List<Stmt> parse() {
     List<Stmt> statements = new ArrayList<>();
@@ -245,7 +268,12 @@ class Parser {
 //> Statements and State parse-expression-statement
   private Stmt expressionStatement() {
     Expr expr = expression();
-    consume(SEMICOLON, "Expect ';' after expression.");
+
+    if (allowExpression && isAtEnd()){
+      foundExpression = true;
+    } else {
+      consume(SEMICOLON, "Expect ';' after expression.");
+    }
     return new Stmt.Expression(expr);
   }
 //< Statements and State parse-expression-statement

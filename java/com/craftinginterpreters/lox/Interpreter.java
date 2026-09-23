@@ -48,7 +48,18 @@ class Interpreter implements Expr.Visitor<Object>,
 
       @Override
       public String toString() { return "<native fn>"; }
+      
     });
+
+    String interpret(Expr expression) {
+      try {
+        Object value = evaluate(expression);
+        return stringify(value);
+      } catch (RuntimeError error) {
+        Lox.runtimeError(error);
+        return null;
+      }
+    }
   }
   
 //< Functions interpreter-constructor
