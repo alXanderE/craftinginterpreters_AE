@@ -19,6 +19,8 @@ class Parser {
 //< parse-error
   private final List<Token> tokens;
   private int current = 0;
+  
+  private int loopDepth = 0;
 
 // REPL implementation
   private boolean allowExpression;
@@ -144,6 +146,7 @@ class Parser {
 //> parse-block
     if (match(LEFT_BRACE)) return new Stmt.Block(block());
 //< parse-block
+    if (match(BREAK)) return breakStatement();
 
     return expressionStatement();
   }
@@ -203,10 +206,29 @@ class Parser {
       body = new Stmt.Block(Arrays.asList(initializer, body));
     }
 
-//< for-desugar-initializer
+    try {
+      loopDepth++;
+      Stmt body = statement();
+
+      if (increment != null) {
+        body = new Stmt.Block(Arrays.asList(
+            body,
+            new Stmt.Expression(increment)));
+      }
+
+      if (condition == null) condition = new Expr.Literal(true);
+      body = new Stmt.While(condition, body);
+
+      if (initializer != null) {
+        body = new Stmt.Block(Arrays.asList(initializer, body));
+      }
+
     return body;
-//< for-body
+  } finally {
+    loopDepth--;
   }
+}
+
 //< Control Flow for-statement
 //> Control Flow if-statement
   private Stmt ifStatement() {
@@ -261,8 +283,14 @@ class Parser {
     Expr condition = expression();
     consume(RIGHT_PAREN, "Expect ')' after condition.");
     Stmt body = statement();
+    try {
+      loopDepth++;
+      Stmt body = statement();
 
-    return new Stmt.While(condition, body);
+      return new Stmt.While(condition, body);
+    } finally {
+      loopDepth--;
+    }
   }
 //< Control Flow while-statement
 //> Statements and State parse-expression-statement
@@ -276,6 +304,15 @@ class Parser {
     }
     return new Stmt.Expression(expr);
   }
+
+  private Stmt breakStatement() {
+    if (loopDepth == 0) {
+      error(previous(), "Must be inside a loop to use 'break'.");
+    }
+    consume(SEMICOLON, "Expect ';' after 'break'.");
+    return new Stmt.Break();
+  }
+
 //< Statements and State parse-expression-statement
 //> Functions parse-function
   private Stmt.Function function(String kind) {

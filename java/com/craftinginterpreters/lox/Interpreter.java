@@ -504,6 +504,27 @@ class Interpreter implements Expr.Visitor<Object>,
       return globals.get(name);
     }
   }
+
+
+  private static class BreakException extends RuntimeException {
+    @Override
+    public Void visitBreakStmt(Stmt.Break stmt) {
+      throw new BreakException();
+    }
+
+    @Override
+    public Void visitWhileStmt(Stmt.While stmt) {
+      try {
+        while (isTruthy(evaluate(stmt.condition))) {
+          execute(stmt.body);
+        }
+      } catch (BreakException ex) {
+        // Do nothing.
+      }
+      return null;
+    }
+ 
+  }
 //< Resolving and Binding look-up-variable
 //< Statements and State visit-variable
 //> check-operand
