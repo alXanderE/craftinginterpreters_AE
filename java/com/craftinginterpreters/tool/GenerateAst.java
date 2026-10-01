@@ -44,8 +44,9 @@ public class GenerateAst {
 */
 //> Statements and State var-expr
       "Unary    : Token operator, Expr right",
-      "Variable : Token name"
+      "Variable : Token name",
 //< Statements and State var-expr
+      "Function : List<Token> parameters, List<Stmt> body"
     ));
 //> Statements and State stmt-ast
 
@@ -84,8 +85,9 @@ public class GenerateAst {
 */
 //> Control Flow while-ast
       "Var        : Token name, Expr initializer",
-      "While      : Expr condition, Stmt body"
+      "While      : Expr condition, Stmt body",
 //< Control Flow while-ast
+      "Function   : Token name, Expr.Function function"
     ));
 //< Statements and State stmt-ast
 //< call-define-ast

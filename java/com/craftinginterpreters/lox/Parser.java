@@ -88,7 +88,10 @@ class Parser {
       if (match(CLASS)) return classDeclaration();
 //< Classes match-class
 //> Functions match-fun
-      if (match(FUN)) return function("function");
+      if (check(FUN) && checkNext(IDENTIFIER)) {
+        consume(FUN, null);
+        return function("function");
+      }
 //< Functions match-fun
       if (match(VAR)) return varDeclaration();
 
@@ -339,6 +342,26 @@ class Parser {
     return new Stmt.Function(name, parameters, body);
 //< parse-body
   }
+
+
+  private Expr.Function functionBody(String kind) {
+  consume(LEFT_PAREN, "Expect '(' after " + kind + " name.");
+  List<Token> parameters = new ArrayList<>();
+  if (!check(RIGHT_PAREN)) {
+    do {
+      if (parameters.size() >= 8) {
+        error(peek(), "Can't have more than 8 parameters.");
+      }
+
+      parameters.add(consume(IDENTIFIER, "Expect parameter name."));
+    } while (match(COMMA));
+  }
+  consume(RIGHT_PAREN, "Expect ')' after parameters.");
+
+  consume(LEFT_BRACE, "Expect '{' before " + kind + " body.");
+  List<Stmt> body = block();
+  return new Expr.Function(parameters, body);
+  }
 //< Functions parse-function
 //> Statements and State block
   private List<Stmt> block() {
@@ -521,6 +544,7 @@ class Parser {
     if (match(FALSE)) return new Expr.Literal(false);
     if (match(TRUE)) return new Expr.Literal(true);
     if (match(NIL)) return new Expr.Literal(null);
+    if (match(FUN)) return functionBody("function");
 
     if (match(NUMBER, STRING)) {
       return new Expr.Literal(previous().literal);
@@ -582,6 +606,12 @@ class Parser {
     return peek().type == type;
   }
 //< check
+
+  private boolean checkNext(TokenType tokenType) {
+    if (isAtEnd()) return false;
+    if (tokens.get(current + 1).type == EOF) return false;
+    return tokens.get(current + 1).type == tokenType;
+  }
 //> advance
   private Token advance() {
     if (!isAtEnd()) current++;

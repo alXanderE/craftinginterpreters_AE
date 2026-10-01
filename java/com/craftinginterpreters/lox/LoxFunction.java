@@ -4,6 +4,7 @@ package com.craftinginterpreters.lox;
 import java.util.List;
 
 class LoxFunction implements LoxCallable {
+  private final String name;
   private final Stmt.Function declaration;
 //> closure-field
   private final Environment closure;
@@ -39,11 +40,18 @@ class LoxFunction implements LoxCallable {
                            isInitializer);
 //< lox-function-bind-with-initializer
   }
+
+  LoxFunction(String name, Expr.Function declaration, Environment closure) {
+    this.name = name;
+    this.closure = closure;
+    this.declaration = declaration;
+  }
 //< Classes bind-instance
 //> function-to-string
   @Override
   public String toString() {
-    return "<fn " + declaration.name.lexeme + ">";
+    if (name == null) return "<fn>";
+    return "<fn " + name + ">";
   }
 //< function-to-string
 //> function-arity

@@ -495,6 +495,18 @@ class Interpreter implements Expr.Visitor<Object>,
     return value;
 //< Resolving and Binding call-look-up-variable
   }
+  
+  @Override
+  public Void visitFunctionStmt(Stmt.Function stmt) {
+      String fnName = stmt.name.lexeme;
+      environment.define(fnName, new LoxFunction(fnName, stmt.function, environment));
+      return null;
+  }
+
+  @Override
+  public Object visitFunctionExpr(Expr.Function expr) {
+      return new LoxFunction(null, expr, environment);
+  }
 //> Resolving and Binding look-up-variable
   private Object lookUpVariable(Token name, Expr expr) {
     Integer distance = locals.get(expr);
