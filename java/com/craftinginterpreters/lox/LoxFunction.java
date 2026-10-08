@@ -17,6 +17,10 @@ class LoxFunction implements LoxCallable {
   LoxFunction(Stmt.Function declaration, Environment closure) {
 */
 //> Classes is-initializer-field
+
+  public boolean isGetter() {
+    return declaration.params == null;
+  }
   private final boolean isInitializer;
 
   LoxFunction(Stmt.Function declaration, Environment closure,
@@ -69,11 +73,13 @@ class LoxFunction implements LoxCallable {
 */
 //> call-closure
     Environment environment = new Environment(closure);
-//< call-closure
-    for (int i = 0; i < declaration.params.size(); i++) {
-      environment.define(declaration.params.get(i).lexeme,
-          arguments.get(i));
+    if (declaration.params != null) {
+      for (int i = 0; i < declaration.params.size(); i++) {
+        environment.define(declaration.params.get(i).lexeme,
+            arguments.get(i));
+      }
     }
+
 
 /* Functions function-call < Functions catch-return
     interpreter.executeBlock(declaration.body, environment);
