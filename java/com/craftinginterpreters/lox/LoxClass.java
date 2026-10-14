@@ -43,17 +43,23 @@ class LoxClass extends LoxInstance implements LoxCallable {
   }
 //< lox-class-methods
 //> lox-class-find-method
-  LoxFunction findMethod(String name) {
-    if (methods.containsKey(name)) {
-      return methods.get(name);
+  LoxFunction findMethod(LoxInstance instance, String name) {
+    LoxFunction method = null;
+    LoxFunction inner = null;
+    LoxClass klass = this;
+    while (klass != null) {
+      if (klass.methods.containsKey(name)) {
+        inner = method;
+        method = klass.methods.get(name);
+      }
+
+      klass = klass.superclass;
     }
 
-//> Inheritance find-method-recurse-superclass
-    if (superclass != null) {
-      return superclass.findMethod(name);
+    if (method != null) {
+      return method.bind(instance, inner);
     }
 
-//< Inheritance find-method-recurse-superclass
     return null;
   }
 //< lox-class-find-method
@@ -70,7 +76,7 @@ class LoxClass extends LoxInstance implements LoxCallable {
 //> lox-class-call-initializer
     LoxFunction initializer = findMethod("init");
     if (initializer != null) {
-      initializer.bind(instance).call(interpreter, arguments);
+      initializer.call(interpreter, arguments);
     }
 
 //< lox-class-call-initializer

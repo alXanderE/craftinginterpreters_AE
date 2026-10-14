@@ -121,6 +121,7 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 //> resolver-begin-this-scope
     beginScope();
     scopes.peek().put("this", true);
+    scopes.peek().put("inner", true); // <-- Add.
 
 //< resolver-begin-this-scope
     for (Stmt.Function method : stmt.methods) {
