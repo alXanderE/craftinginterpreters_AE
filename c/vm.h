@@ -39,20 +39,22 @@ typedef struct {
 //< Calls and Functions call-frame
 
 typedef struct {
-/* A Virtual Machine vm-h < Calls and Functions frame-array
+
   Chunk* chunk;
-*/
-/* A Virtual Machine ip < Calls and Functions frame-array
+
+
   uint8_t* ip;
-*/
+
 //> Calls and Functions frame-array
   CallFrame frames[FRAMES_MAX];
   int frameCount;
   
 //< Calls and Functions frame-array
 //> vm-stack
+  Value* stack;
   Value stack[STACK_MAX];
-  Value* stackTop;
+  int stackCount;
+  int stackCapacity;
 //< vm-stack
 //> Global Variables vm-globals
   Table globals;
@@ -93,7 +95,12 @@ typedef enum {
 extern VM vm;
 
 //< Strings extern-vm
-void initVM();
+void initVM() {
+  vm.stack = NULL;
+  vm.stackCapacity = 0;
+  resetStack();
+}
+
 void freeVM();
 /* A Virtual Machine interpret-h < Scanning on Demand vm-interpret-h
 InterpretResult interpret(Chunk* chunk);

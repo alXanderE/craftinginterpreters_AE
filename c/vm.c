@@ -148,14 +148,21 @@ void freeVM() {
 }
 //> push
 void push(Value value) {
-  *vm.stackTop = value;
-  vm.stackTop++;
+  if (vm.stackCapacity < vm.stackCount + 1) {
+    int oldCapacity = vm.stackCapacity;
+    vm.stackCapacity = GROW_CAPACITY(oldCapacity);
+    vm.stack = GROW_ARRAY(Value, vm.stack, 
+                          oldCapacity, vm.stackCapacity);
+  }
+
+  vm.stack[vm.stackCount] = value;
+  vm.stackCount++;
 }
 //< push
 //> pop
 Value pop() {
-  vm.stackTop--;
-  return *vm.stackTop;
+  vm.stackCount--;
+  return vm.stack[vm.stackCount];
 }
 //< pop
 //> Types of Values peek
@@ -451,7 +458,7 @@ static InterpretResult run() {
 #ifdef DEBUG_TRACE_EXECUTION
 //> trace-stack
     printf("          ");
-    for (Value* slot = vm.stack; slot < vm.stackTop; slot++) {
+    for (Value *slot = vm.stack; slot < vm.stack + vm.stackCount; slot++) {
       printf("[ ");
       printValue(*slot);
       printf(" ]");
