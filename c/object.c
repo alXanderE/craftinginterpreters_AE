@@ -141,6 +141,22 @@ static uint32_t hashString(const char* key, int length) {
   }
   return hash;
 }
+
+ObjString* makeString(int length) {
+  ObjString* string = (ObjString*)allocateObject(
+      sizeof(ObjString) + length + 1, OBJ_STRING);
+  string->length = length;
+  return string;
+}
+
+ObjString* copyString(const char* chars, int length) {
+  ObjString* string = makeString(length);
+
+  memcpy(string->chars, chars, length);
+  string->chars[length] = '\0';
+
+  return string;
+}
 //< Hash Tables hash-string
 //> take-string
 ObjString* takeString(char* chars, int length) {

@@ -128,6 +128,15 @@ struct ObjString {
   uint32_t hash;
 //< Hash Tables obj-string-hash
 };
+
+struct sObjString {
+  Obj obj;
+  int length;
+  // Was:
+  // char* chars;
+  // Now:
+  char chars[];
+};
 //< obj-string
 //> Closures obj-upvalue
 typedef struct ObjUpvalue {

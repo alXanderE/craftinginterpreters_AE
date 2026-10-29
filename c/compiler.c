@@ -1333,6 +1333,18 @@ static void returnStatement() {
     emitByte(OP_RETURN);
   }
 }
+
+static void conditional()
+{
+  // Compile the then branch.
+  parsePrecedence(compiler, PREC_CONDITIONAL);
+
+  consume(compiler, TOKEN_COLON,
+          "Expect ':' after then branch of conditional operator.");
+
+  // Compile the else branch.
+  parsePrecedence(compiler, PREC_ASSIGNMENT);
+}
 //< Calls and Functions return-statement
 //> Jumping Back and Forth while-statement
 static void whileStatement() {

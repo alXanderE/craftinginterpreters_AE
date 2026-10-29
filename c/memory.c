@@ -193,6 +193,16 @@ static void freeObject(Obj* object) {
       FREE(ObjClosure, object);
       break;
     }
+
+    case OBJ_STRING: {
+      ObjString* string = (ObjString*)object;
+      // Was:
+      // FREE_ARRAY(char, string->chars, string->length + 1);
+      // FREE(ObjString, object);
+      // Now:
+      reallocate(object, sizeof(ObjString) + string->length + 1, 0);
+      break;
+    }
 //< Closures free-closure
 //> Calls and Functions free-function
     case OBJ_FUNCTION: {
