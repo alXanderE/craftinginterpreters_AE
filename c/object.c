@@ -143,6 +143,27 @@ static uint32_t hashString(const char* key, int length) {
 }
 
 
+static uint32_t hashDouble(double value) {
+  union BitCast {
+    double value;
+    uint32_t ints[2];
+  };
+
+  union BitCast cast;
+  cast.value = (value) + 1.0;
+  return cast.ints[0] + cast.ints[1];
+}
+
+uint32_t hashValue(Value value) {
+  switch (value.type) {
+    case VAL_BOOL:   return AS_BOOL(value) ? 3 : 5;
+    case VAL_NIL:    return 7;
+    case VAL_NUMBER: return hashDouble(AS_NUMBER(value));
+    case VAL_OBJ:    return AS_STRING(value)->hash;
+    case VAL_EMPTY:  return 0;
+  }
+}
+
 ObjString* makeString(bool ownsChars, char* chars, int length) {
   ObjString* string = ALLOCATE_OBJ(ObjString, OBJ_STRING);
   string->ownsChars = ownsChars;
