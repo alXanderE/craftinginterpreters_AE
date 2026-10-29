@@ -142,40 +142,14 @@ static uint32_t hashString(const char* key, int length) {
   return hash;
 }
 
-ObjString* makeString(int length) {
-  ObjString* string = (ObjString*)allocateObject(
-      sizeof(ObjString) + length + 1, OBJ_STRING);
+
+ObjString* makeString(bool ownsChars, char* chars, int length) {
+  ObjString* string = ALLOCATE_OBJ(ObjString, OBJ_STRING);
+  string->ownsChars = ownsChars;
   string->length = length;
-  return string;
-}
-
-ObjString* copyString(const char* chars, int length) {
-  ObjString* string = makeString(length);
-
-  memcpy(string->chars, chars, length);
-  string->chars[length] = '\0';
+  string->chars = chars;
 
   return string;
-}
-//< Hash Tables hash-string
-//> take-string
-ObjString* takeString(char* chars, int length) {
-/* Strings take-string < Hash Tables take-string-hash
-  return allocateString(chars, length);
-*/
-//> Hash Tables take-string-hash
-  uint32_t hash = hashString(chars, length);
-//> take-string-intern
-  ObjString* interned = tableFindString(&vm.strings, chars, length,
-                                        hash);
-  if (interned != NULL) {
-    FREE_ARRAY(char, chars, length + 1);
-    return interned;
-  }
-
-//< take-string-intern
-  return allocateString(chars, length, hash);
-//< Hash Tables take-string-hash
 }
 //< take-string
 ObjString* copyString(const char* chars, int length) {
@@ -210,6 +184,7 @@ ObjUpvalue* newUpvalue(Value* slot) {
 //< init-next
   return upvalue;
 }
+
 //< Closures new-upvalue
 //> Calls and Functions print-function-helper
 static void printFunction(ObjFunction* function) {
@@ -257,7 +232,8 @@ void printObject(Value value) {
       break;
 //< Calls and Functions print-native
     case OBJ_STRING:
-      printf("%s", AS_CSTRING(value));
+      // Changed:
+      printf("%.*s", AS_STRING(value)->length, AS_CSTRING(value));
       break;
 //> Closures print-upvalue
     case OBJ_UPVALUE:

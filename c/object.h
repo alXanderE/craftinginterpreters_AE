@@ -132,8 +132,9 @@ struct ObjString {
 struct sObjString {
   Obj obj;
   int length;
+  bool ownsChars;
   // Was:
-  // char* chars;
+  const char* chars;
   // Now:
   char chars[];
 };
