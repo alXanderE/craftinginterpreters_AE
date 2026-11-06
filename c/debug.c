@@ -55,6 +55,16 @@ static int simpleInstruction(const char* name, int offset) {
   printf("%s\n", name);
   return offset + 1;
 }
+
+static int shortInstruction(const char* name,
+                            Chunk* chunk, int offset) {
+  uint16_t slot =
+      (uint16_t)(chunk->code[offset + 1] << 8);
+  slot |= chunk->code[offset + 2];
+
+  printf("%-16s %4d\n", name, slot);
+  return offset + 3;
+}
 //< simple-instruction
 //> Local Variables byte-instruction
 static int byteInstruction(const char* name, Chunk* chunk,
@@ -110,6 +120,14 @@ int disassembleInstruction(Chunk* chunk, int offset) {
       return byteInstruction("OP_GET_LOCAL", chunk, offset);
     case OP_SET_LOCAL:
       return byteInstruction("OP_SET_LOCAL", chunk, offset);
+
+    case OP_GET_LOCAL_LONG:
+      return shortInstruction("OP_GET_LOCAL_LONG",
+                          chunk, offset);
+
+    case OP_SET_LOCAL_LONG:
+      return shortInstruction("OP_SET_LOCAL_LONG",
+                          chunk, offset);
 //< Local Variables disassemble-local
 //> Global Variables disassemble-get-global
     case OP_GET_GLOBAL:
@@ -205,9 +223,12 @@ int disassembleInstruction(Chunk* chunk, int offset) {
           chunk->constants.values[constant]);
       for (int j = 0; j < function->upvalueCount; j++) {
         int isLocal = chunk->code[offset++];
-        int index = chunk->code[offset++];
+        int index = chunk->code[offset++] << 8;
+        index |= chunk->code[offset++];
+
         printf("%04d      |                     %s %d\n",
-               offset - 2, isLocal ? "local" : "upvalue", index);
+              offset - 3,
+              isLocal ? "local" : "upvalue", index);
       }
       
 //< disassemble-upvalues

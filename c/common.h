@@ -26,6 +26,7 @@
 
 #define UINT8_COUNT (UINT8_MAX + 1)
 //< Local Variables uint8-count
+#define MAX_LOCALS 1024
 
 #endif
 //> omit

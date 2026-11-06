@@ -78,7 +78,7 @@ typedef struct {
 //< Local Variables local-struct
 //> Closures upvalue-struct
 typedef struct {
-  uint8_t index;
+  uint16_t index;
   bool isLocal;
 } Upvalue;
 //< Closures upvalue-struct
@@ -108,7 +108,7 @@ typedef struct Compiler {
   FunctionType type;
 
 //< Calls and Functions function-fields
-  Local locals[UINT8_COUNT];
+  Local locals[MAX_LOCALS];
   int localCount;
 //> Closures upvalues-array
   Upvalue upvalues[UINT8_COUNT];
@@ -231,6 +231,17 @@ static void emitByte(uint8_t byte) {
 static void emitBytes(uint8_t byte1, uint8_t byte2) {
   emitByte(byte1);
   emitByte(byte2);
+}
+static void emitLocalInstruction(uint8_t shortOp,
+                                 uint8_t longOp,
+                                 int slot) {
+  if (slot <= UINT8_MAX) {
+    emitBytes(shortOp, (uint8_t)slot);
+  } else {
+    emitByte(longOp);
+    emitByte((slot >> 8) & 0xff);
+    emitByte(slot & 0xff);
+  }
 }
 //< Compiling Expressions emit-bytes
 //> Jumping Back and Forth emit-loop
@@ -456,8 +467,9 @@ static int resolveLocal(Compiler* compiler, Token* name) {
 }
 //< Local Variables resolve-local
 //> Closures add-upvalue
-static int addUpvalue(Compiler* compiler, uint8_t index,
-                      bool isLocal) {
+static int addUpvalue(Compiler* compiler,
+                     uint16_t index,
+                     bool isLocal) {
   int upvalueCount = compiler->function->upvalueCount;
 //> existing-upvalue
 
@@ -490,7 +502,7 @@ static int resolveUpvalue(Compiler* compiler, Token* name) {
 //> mark-local-captured
     compiler->enclosing->locals[local].isCaptured = true;
 //< mark-local-captured
-    return addUpvalue(compiler, (uint8_t)local, true);
+    return addUpvalue(compiler, (uint16_t)local, true);
   }
 
 //> resolve-upvalue-recurse
@@ -506,7 +518,7 @@ static int resolveUpvalue(Compiler* compiler, Token* name) {
 //> Local Variables add-local
 static void addLocal(Token name) {
 //> too-many-locals
-  if (current->localCount == UINT8_COUNT) {
+  if (current->localCount == MAX_LOCALS) {
     error("Too many local variables in function.");
     return;
   }
@@ -752,43 +764,39 @@ static void namedVariable(Token name) {
 //> Global Variables named-variable-signature
 static void namedVariable(Token name, bool canAssign) {
   uint8_t getOp, setOp;
-  bool isConst = false;
-
   int arg = resolveLocal(current, &name);
+
+  bool isLocal = false;
 
   if (arg != -1) {
     getOp = OP_GET_LOCAL;
     setOp = OP_SET_LOCAL;
-
-    isConst = current->locals[arg].isConst;
-
+    isLocal = true;
   } else if ((arg = resolveUpvalue(current, &name)) != -1) {
     getOp = OP_GET_UPVALUE;
     setOp = OP_SET_UPVALUE;
-
-    // For full closure support, propagate isConst
-    // through the Upvalue metadata.
-
   } else {
     arg = identifierConstant(&name);
     getOp = OP_GET_GLOBAL;
     setOp = OP_SET_GLOBAL;
-
-    isConst = isConstGlobal(&name);
-    // Global const declarations also need tracking.
   }
 
   if (canAssign && match(TOKEN_EQUAL)) {
     expression();
 
-    if (isConst) {
-      error("Cannot assign to a constant variable.");
+    if (isLocal) {
+      emitLocalInstruction(OP_SET_LOCAL,
+                           OP_SET_LOCAL_LONG, arg);
     } else {
       emitBytes(setOp, (uint8_t)arg);
     }
-
   } else {
-    emitBytes(getOp, (uint8_t)arg);
+    if (isLocal) {
+      emitLocalInstruction(OP_GET_LOCAL,
+                           OP_GET_LOCAL_LONG, arg);
+    } else {
+      emitBytes(getOp, (uint8_t)arg);
+    }
   }
 }
 //< Global Variables read-named-variable
@@ -1102,7 +1110,10 @@ static void function(FunctionType type) {
 
   for (int i = 0; i < function->upvalueCount; i++) {
     emitByte(compiler.upvalues[i].isLocal ? 1 : 0);
-    emitByte(compiler.upvalues[i].index);
+
+    uint16_t index = compiler.upvalues[i].index;
+    emitByte((index >> 8) & 0xff);
+    emitByte(index & 0xff);
   }
 //< Closures capture-upvalues
 }
