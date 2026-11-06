@@ -1008,6 +1008,10 @@ ParseRule rules[] = {
   [TOKEN_ERROR]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_EOF]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_CONST]         = {NULL, NULL, PREC_NONE},
+  [TOKEN_COLON]   = {NULL, NULL, PREC_NONE},
+  [TOKEN_SWITCH]  = {NULL, NULL, PREC_NONE},
+  [TOKEN_CASE]    = {NULL, NULL, PREC_NONE},  
+  [TOKEN_DEFAULT] = {NULL, NULL, PREC_NONE},
 };
 //< Compiling Expressions rules
 //> Compiling Expressions parse-precedence
@@ -1352,6 +1356,107 @@ static void ifStatement() {
   patchJump(elseJump);
 //< patch-else
 }
+
+static void switchStatement() {
+  consume(TOKEN_LEFT_PAREN,
+          "Expect '(' after 'switch'.");
+
+  // Create a scope for the switch value.
+  beginScope();
+
+  // Evaluate the switch expression once.
+  expression();
+
+  consume(TOKEN_RIGHT_PAREN,
+          "Expect ')' after switch expression.");
+
+  // Store the switch value in a hidden local variable.
+  Token switchValue = {
+    TOKEN_IDENTIFIER, "$switch", 7, parser.previous.line
+  };
+
+  addLocal(switchValue);
+  markInitialized();
+
+  consume(TOKEN_LEFT_BRACE,
+          "Expect '{' before switch cases.");
+
+  // Store jumps that must skip to the end of the switch.
+  int* endJumps = NULL;
+  int jumpCount = 0;
+  int jumpCapacity = 0;
+
+  // Compile each case.
+  while (match(TOKEN_CASE)) {
+
+    // Load the original switch value.
+    namedVariable(switchValue, false);
+
+    // Evaluate this case's expression.
+    expression();
+
+    consume(TOKEN_COLON,
+            "Expect ':' after case value.");
+
+    // Compare switch value with case value.
+    emitByte(OP_EQUAL);
+
+    // Skip the case body if values differ.
+    int nextCaseJump = emitJump(OP_JUMP_IF_FALSE);
+
+    // Matching case: remove comparison result.
+    emitByte(OP_POP);
+
+    // Compile statements belonging to this case.
+    while (!check(TOKEN_CASE) &&
+           !check(TOKEN_DEFAULT) &&
+           !check(TOKEN_RIGHT_BRACE) &&
+           !check(TOKEN_EOF)) {
+      statement();
+    }
+
+    // Matching cases automatically exit the switch.
+    if (jumpCapacity < jumpCount + 1) {
+      int oldCapacity = jumpCapacity;
+      jumpCapacity = GROW_CAPACITY(oldCapacity);
+
+      endJumps = GROW_ARRAY(int, endJumps,
+                            oldCapacity, jumpCapacity);
+    }
+
+    endJumps[jumpCount++] = emitJump(OP_JUMP);
+
+    // Nonmatching case continues here.
+    patchJump(nextCaseJump);
+
+    // Remove the false comparison result.
+    emitByte(OP_POP);
+  }
+
+  // Compile optional default case.
+  if (match(TOKEN_DEFAULT)) {
+    consume(TOKEN_COLON,
+            "Expect ':' after 'default'.");
+
+    while (!check(TOKEN_RIGHT_BRACE) &&
+           !check(TOKEN_EOF)) {
+      statement();
+    }
+  }
+
+  consume(TOKEN_RIGHT_BRACE,
+          "Expect '}' after switch statement.");
+
+  // All matching cases jump here.
+  for (int i = 0; i < jumpCount; i++) {
+    patchJump(endJumps[i]);
+  }
+
+  FREE_ARRAY(int, endJumps, jumpCapacity);
+
+  // Remove the saved switch value from the stack.
+  endScope();
+}
 //< Jumping Back and Forth if-statement
 //> Global Variables print-statement
 static void printStatement() {
@@ -1428,6 +1533,7 @@ static void synchronize() {
       case TOKEN_FOR:
       case TOKEN_IF:
       case TOKEN_WHILE:
+      case TOKEN_SWITCH:
       case TOKEN_PRINT:
       case TOKEN_RETURN:
         return;
@@ -1495,6 +1601,8 @@ static void statement() {
     whileStatement();
 //< Jumping Back and Forth parse-while
 //> Local Variables parse-block
+  } else if (match(TOKEN_SWITCH)) {
+    switchStatement();
   } else if (match(TOKEN_LEFT_BRACE)) {
     beginScope();
     block();
