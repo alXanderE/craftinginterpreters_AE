@@ -17,6 +17,7 @@
 
 #ifdef DEBUG_PRINT_CODE
 #include "debug.h"
+
 #endif
 //< Compiling Expressions include-debug
 //> Compiling Expressions parser
@@ -72,6 +73,7 @@ typedef struct {
 //> Closures is-captured-field
   bool isCaptured;
 //< Closures is-captured-field
+  bool isConst;
 } Local;
 //< Local Variables local-struct
 //> Closures upvalue-struct
@@ -141,6 +143,11 @@ static Chunk* currentChunk() {
 }
 */
 //> Calls and Functions current-chunk
+
+#define MAX_CONST_GLOBALS 256
+
+static Token constGlobals[MAX_CONST_GLOBALS];
+static int constGlobalCount = 0;
 
 static Chunk* currentChunk() {
   return &current->function->chunk;
@@ -516,6 +523,26 @@ static void addLocal(Token name) {
 //> Closures init-is-captured
   local->isCaptured = false;
 //< Closures init-is-captured
+  local->isLocal = false;
+}
+
+static void addConstGlobal(Token name) {
+  if (constGlobalCount >= MAX_CONST_GLOBALS) {
+    error("Too many constant globals.");
+    return;
+  }
+
+  constGlobals[constGlobalCount++] = name;
+}
+
+static bool isConstGlobal(Token* name) {
+  for (int i = 0; i < constGlobalCount; i++) {
+    if (identifiersEqual(name, &constGlobals[i])) {
+      return true;
+    }
+  }
+
+  return false;
 }
 //< Local Variables add-local
 //> Local Variables declare-variable
@@ -724,55 +751,45 @@ static void namedVariable(Token name) {
 */
 //> Global Variables named-variable-signature
 static void namedVariable(Token name, bool canAssign) {
-//< Global Variables named-variable-signature
-/* Global Variables read-named-variable < Local Variables named-local
-  uint8_t arg = identifierConstant(&name);
-*/
-//> Global Variables read-named-variable
-//> Local Variables named-local
   uint8_t getOp, setOp;
+  bool isConst = false;
+
   int arg = resolveLocal(current, &name);
+
   if (arg != -1) {
     getOp = OP_GET_LOCAL;
     setOp = OP_SET_LOCAL;
-//> Closures named-variable-upvalue
+
+    isConst = current->locals[arg].isConst;
+
   } else if ((arg = resolveUpvalue(current, &name)) != -1) {
     getOp = OP_GET_UPVALUE;
     setOp = OP_SET_UPVALUE;
-//< Closures named-variable-upvalue
+
+    // For full closure support, propagate isConst
+    // through the Upvalue metadata.
+
   } else {
     arg = identifierConstant(&name);
     getOp = OP_GET_GLOBAL;
     setOp = OP_SET_GLOBAL;
-  }
-//< Local Variables named-local
-/* Global Variables read-named-variable < Global Variables named-variable
-  emitBytes(OP_GET_GLOBAL, arg);
-*/
-//> named-variable
 
-/* Global Variables named-variable < Global Variables named-variable-can-assign
-  if (match(TOKEN_EQUAL)) {
-*/
-//> named-variable-can-assign
-  if (canAssign && match(TOKEN_EQUAL)) {
-//< named-variable-can-assign
-    expression();
-/* Global Variables named-variable < Local Variables emit-set
-    emitBytes(OP_SET_GLOBAL, arg);
-*/
-//> Local Variables emit-set
-    emitBytes(setOp, (uint8_t)arg);
-//< Local Variables emit-set
-  } else {
-/* Global Variables named-variable < Local Variables emit-get
-    emitBytes(OP_GET_GLOBAL, arg);
-*/
-//> Local Variables emit-get
-    emitBytes(getOp, (uint8_t)arg);
-//< Local Variables emit-get
+    isConst = isConstGlobal(&name);
+    // Global const declarations also need tracking.
   }
-//< named-variable
+
+  if (canAssign && match(TOKEN_EQUAL)) {
+    expression();
+
+    if (isConst) {
+      error("Cannot assign to a constant variable.");
+    } else {
+      emitBytes(setOp, (uint8_t)arg);
+    }
+
+  } else {
+    emitBytes(getOp, (uint8_t)arg);
+  }
 }
 //< Global Variables read-named-variable
 /* Global Variables variable-without-assign < Global Variables variable
@@ -982,6 +999,7 @@ ParseRule rules[] = {
   [TOKEN_WHILE]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_ERROR]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_EOF]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_CONST]         = {NULL, NULL, PREC_NONE},
 };
 //< Compiling Expressions rules
 //> Compiling Expressions parse-precedence
@@ -1195,16 +1213,28 @@ static void funDeclaration() {
 }
 //< Calls and Functions fun-declaration
 //> Global Variables var-declaration
-static void varDeclaration() {
+static void varDeclaration(bool isConst) {
   uint8_t global = parseVariable("Expect variable name.");
+
+  if (isConst && current->scopeDepth == 0) {
+    addConstGlobal(parser.previous);
+  }
 
   if (match(TOKEN_EQUAL)) {
     expression();
   } else {
+    if (isConst) {
+      error("Constant variables must be initialized.");
+    }
     emitByte(OP_NIL);
   }
+
   consume(TOKEN_SEMICOLON,
           "Expect ';' after variable declaration.");
+
+  if (current->scopeDepth > 0) {
+    current->locals[current->localCount - 1].isConst = isConst;
+  }
 
   defineVariable(global);
 }
@@ -1417,7 +1447,9 @@ static void declaration() {
   } else if (match(TOKEN_VAR)) {
 //< Calls and Functions match-fun
 //> match-var
-    varDeclaration();
+    varDeclaration(false);
+  } else if (match(TOKEN_CONST)) {
+    varDeclaration(true);
   } else {
     statement();
   }
@@ -1473,6 +1505,7 @@ bool compile(const char* source, Chunk* chunk) {
 */
 //> Calls and Functions compile-signature
 ObjFunction* compile(const char* source) {
+  constGlobalCount = 0;
 //< Calls and Functions compile-signature
   initScanner(source);
 /* Scanning on Demand dump-tokens < Compiling Expressions compile-chunk
