@@ -198,6 +198,7 @@ static bool call(ObjClosure* closure, int argCount) {
 */
 //> Closures check-arity
   if (argCount != closure->function->arity) {
+    SAVE_IP();
     runtimeError("Expected %d arguments but got %d.",
         closure->function->arity, argCount);
 //< Closures check-arity
@@ -208,6 +209,7 @@ static bool call(ObjClosure* closure, int argCount) {
 //< check-arity
 //> check-overflow
   if (vm.frameCount == FRAMES_MAX) {
+    SAVE_IP();
     runtimeError("Stack overflow.");
     return false;
   }
@@ -250,6 +252,7 @@ static bool callValue(Value callee, int argCount) {
           return call(AS_CLOSURE(initializer), argCount);
 //> no-init-arity-error
         } else if (argCount != 0) {
+          SAVE_IP();
           runtimeError("Expected 0 arguments but got %d.",
                        argCount);
           return false;
@@ -280,6 +283,7 @@ static bool callValue(Value callee, int argCount) {
         break; // Non-callable object type.
     }
   }
+  SAVE_IP();
   runtimeError("Can only call functions and classes.");
   return false;
 }
@@ -289,6 +293,7 @@ static bool invokeFromClass(ObjClass* klass, ObjString* name,
                             int argCount) {
   Value method;
   if (!tableGet(&klass->methods, name, &method)) {
+    SAVE_IP();
     runtimeError("Undefined property '%s'.", name->chars);
     return false;
   }
@@ -301,6 +306,7 @@ static bool invoke(ObjString* name, int argCount) {
 //> invoke-check-type
 
   if (!IS_INSTANCE(receiver)) {
+    SAVE_IP();
     runtimeError("Only instances have methods.");
     return false;
   }
@@ -323,6 +329,7 @@ static bool invoke(ObjString* name, int argCount) {
 static bool bindMethod(ObjClass* klass, ObjString* name) {
   Value method;
   if (!tableGet(&klass->methods, name, &method)) {
+    SAVE_IP();
     runtimeError("Undefined property '%s'.", name->chars);
     return false;
   }
@@ -414,9 +421,9 @@ static void concatenate() {
 //< Strings concatenate
 //> run
 static InterpretResult run() {
-//> Calls and Functions run
   CallFrame* frame = &vm.frames[vm.frameCount - 1];
 
+  register uint8_t* ip = frame->ip;
 /* A Virtual Machine run < Calls and Functions run
 #define READ_BYTE() (*vm.ip++)
 */
@@ -440,7 +447,10 @@ static InterpretResult run() {
 //> Closures read-constant
 #define READ_CONSTANT() \
     (frame->closure->function->chunk.constants.values[READ_BYTE()])
-//< Closures read-constant
+
+#define READ_STRING() AS_STRING(READ_CONSTANT())
+
+#define SAVE_IP() (frame->ip = ip)
 
 //< Calls and Functions run
 //> Global Variables read-string
@@ -458,6 +468,7 @@ static InterpretResult run() {
 #define BINARY_OP(valueType, op) \
     do { \
       if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) { \
+        SAVE_IP();
         runtimeError("Operands must be numbers."); \
         return INTERPRET_RUNTIME_ERROR; \
       } \
@@ -470,27 +481,19 @@ static InterpretResult run() {
   for (;;) {
 //> trace-execution
 #ifdef DEBUG_TRACE_EXECUTION
-//> trace-stack
-    printf("          ");
-    for (Value *slot = vm.stack; slot < vm.stack + vm.stackCount; slot++) {
-      printf("[ ");
-      printValue(*slot);
-      printf(" ]");
-    }
-    printf("\n");
-//< trace-stack
-/* A Virtual Machine trace-execution < Calls and Functions trace-execution
-    disassembleInstruction(vm.chunk,
-                           (int)(vm.ip - vm.chunk->code));
-*/
-/* Calls and Functions trace-execution < Closures disassemble-instruction
-    disassembleInstruction(&frame->function->chunk,
-        (int)(frame->ip - frame->function->chunk.code));
-*/
-//> Closures disassemble-instruction
-    disassembleInstruction(&frame->closure->function->chunk,
-        (int)(frame->ip - frame->closure->function->chunk.code));
-//< Closures disassemble-instruction
+  printf("          ");
+
+  for (Value* slot = vm.stack; slot < vm.stackTop; slot++) {
+    printf("[ ");
+    printValue(*slot);
+    printf(" ]");
+  }
+
+  printf("\n");
+
+  disassembleInstruction(
+      &frame->closure->function->chunk,
+      (int)(ip - frame->closure->function->chunk.code));
 #endif
 
 //< trace-execution
@@ -557,6 +560,7 @@ static InterpretResult run() {
         ObjString* name = READ_STRING();
         Value value;
         if (!tableGet(&vm.globals, name, &value)) {
+          SAVE_IP();
           runtimeError("Undefined variable '%s'.", name->chars);
           return INTERPRET_RUNTIME_ERROR;
         }
@@ -577,6 +581,7 @@ static InterpretResult run() {
         ObjString* name = READ_STRING();
         if (tableSet(&vm.globals, name, peek(0))) {
           tableDelete(&vm.globals, name); // [delete]
+          SAVE_IP();
           runtimeError("Undefined variable '%s'.", name->chars);
           return INTERPRET_RUNTIME_ERROR;
         }
@@ -601,6 +606,7 @@ static InterpretResult run() {
       case OP_GET_PROPERTY: {
 //> get-not-instance
         if (!IS_INSTANCE(peek(0))) {
+          SAVE_IP();
           runtimeError("Only instances have properties.");
           return INTERPRET_RUNTIME_ERROR;
         }
@@ -634,6 +640,7 @@ static InterpretResult run() {
       case OP_SET_PROPERTY: {
 //> set-not-instance
         if (!IS_INSTANCE(peek(1))) {
+          SAVE_IP();
           runtimeError("Only instances have fields.");
           return INTERPRET_RUNTIME_ERROR;
         }
@@ -691,6 +698,7 @@ static InterpretResult run() {
           double a = AS_NUMBER(pop());
           push(NUMBER_VAL(a + b));
         } else {
+          SAVE_IP();
           runtimeError(
               "Operands must be two numbers or two strings.");
           return INTERPRET_RUNTIME_ERROR;
@@ -711,6 +719,7 @@ static InterpretResult run() {
 //> Types of Values op-negate
       case OP_NEGATE:
         if (!IS_NUMBER(peek(0))) {
+          SAVE_IP();
           runtimeError("Operand must be a number.");
           return INTERPRET_RUNTIME_ERROR;
         }
@@ -727,48 +736,35 @@ static InterpretResult run() {
 //> Jumping Back and Forth op-jump
       case OP_JUMP: {
         uint16_t offset = READ_SHORT();
-/* Jumping Back and Forth op-jump < Calls and Functions jump
-        vm.ip += offset;
-*/
-//> Calls and Functions jump
-        frame->ip += offset;
-//< Calls and Functions jump
+        ip += offset;
         break;
       }
-//< Jumping Back and Forth op-jump
-//> Jumping Back and Forth op-jump-if-false
+
       case OP_JUMP_IF_FALSE: {
         uint16_t offset = READ_SHORT();
-/* Jumping Back and Forth op-jump-if-false < Calls and Functions jump-if-false
-        if (isFalsey(peek(0))) vm.ip += offset;
-*/
-//> Calls and Functions jump-if-false
-        if (isFalsey(peek(0))) frame->ip += offset;
-//< Calls and Functions jump-if-false
+        if (isFalsey(peek(0))) ip += offset;
         break;
       }
-//< Jumping Back and Forth op-jump-if-false
-//> Jumping Back and Forth op-loop
+
       case OP_LOOP: {
         uint16_t offset = READ_SHORT();
-/* Jumping Back and Forth op-loop < Calls and Functions loop
-        vm.ip -= offset;
-*/
-//> Calls and Functions loop
-        frame->ip -= offset;
-//< Calls and Functions loop
+        ip -= offset;
         break;
       }
 //< Jumping Back and Forth op-loop
 //> Calls and Functions interpret-call
       case OP_CALL: {
         int argCount = READ_BYTE();
+
+        SAVE_IP();
+
         if (!callValue(peek(argCount), argCount)) {
           return INTERPRET_RUNTIME_ERROR;
         }
-//> update-frame-after-call
+
         frame = &vm.frames[vm.frameCount - 1];
-//< update-frame-after-call
+        ip = frame->ip;
+
         break;
       }
 //< Calls and Functions interpret-call
@@ -776,22 +772,33 @@ static InterpretResult run() {
       case OP_INVOKE: {
         ObjString* method = READ_STRING();
         int argCount = READ_BYTE();
+
+        SAVE_IP();
+
         if (!invoke(method, argCount)) {
           return INTERPRET_RUNTIME_ERROR;
         }
+
         frame = &vm.frames[vm.frameCount - 1];
+        ip = frame->ip;
+
         break;
       }
-//< Methods and Initializers interpret-invoke
-//> Superclasses interpret-super-invoke
+
       case OP_SUPER_INVOKE: {
         ObjString* method = READ_STRING();
         int argCount = READ_BYTE();
         ObjClass* superclass = AS_CLASS(pop());
+
+        SAVE_IP();
+
         if (!invokeFromClass(superclass, method, argCount)) {
           return INTERPRET_RUNTIME_ERROR;
         }
+
         frame = &vm.frames[vm.frameCount - 1];
+        ip = frame->ip;
+
         break;
       }
 //< Superclasses interpret-super-invoke
@@ -822,22 +829,12 @@ static InterpretResult run() {
         break;
 //< Closures interpret-close-upvalue
       case OP_RETURN: {
-/* A Virtual Machine print-return < Global Variables op-return
-        printValue(pop());
-        printf("\n");
-*/
-/* Global Variables op-return < Calls and Functions interpret-return
-        // Exit interpreter.
-*/
-/* A Virtual Machine run < Calls and Functions interpret-return
-        return INTERPRET_OK;
-*/
-//> Calls and Functions interpret-return
         Value result = pop();
-//> Closures return-close-upvalues
+
         closeUpvalues(frame->slots);
-//< Closures return-close-upvalues
+
         vm.frameCount--;
+
         if (vm.frameCount == 0) {
           pop();
           return INTERPRET_OK;
@@ -845,9 +842,11 @@ static InterpretResult run() {
 
         vm.stackTop = frame->slots;
         push(result);
+
         frame = &vm.frames[vm.frameCount - 1];
+        ip = frame->ip;
+
         break;
-//< Calls and Functions interpret-return
       }
 //> Classes and Instances interpret-class
       case OP_CLASS:
@@ -859,6 +858,7 @@ static InterpretResult run() {
         Value superclass = peek(1);
 //> inherit-non-class
         if (!IS_CLASS(superclass)) {
+          SAVE_IP();
           runtimeError("Superclass must be a class.");
           return INTERPRET_RUNTIME_ERROR;
         }
@@ -892,7 +892,8 @@ static InterpretResult run() {
 //> undef-binary-op
 #undef BINARY_OP
 //< undef-binary-op
-}
+#undef SAVE_IP
+} 
 //< run
 //> omit
 void hack(bool b) {
