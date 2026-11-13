@@ -27,8 +27,9 @@
 
 VM vm; // [one]
 //> Calls and Functions clock-native
-static Value clockNative(int argCount, Value* args) {
-  return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
+static bool clockNative(int argCount, Value* args, Value* result) {
+  *result = NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
+  return true;
 }
 //< Calls and Functions clock-native
 //> reset-stack
@@ -279,6 +280,10 @@ static bool callValue(Value callee, int argCount) {
           return false;
         }
         Value result = native(argCount, vm.stackTop - argCount);
+
+        if (!native(argCount, args, &result)) {
+          return false;
+        }
         vm.stackTop -= argCount + 1;
         push(result);
         return true;

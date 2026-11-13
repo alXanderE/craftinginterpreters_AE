@@ -90,6 +90,8 @@ typedef enum {
   INTERPRET_RUNTIME_ERROR
 } InterpretResult;
 
+typedef bool (*NativeFn)(int argCount, Value* args, Value* result);
+
 //< interpret-result
 //> Strings extern-vm
 extern VM vm;
